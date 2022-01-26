@@ -204,9 +204,10 @@ if __name__ == '__main__':
     import ray
     from ray.rllib.agents import ppo
     from main import WordleEnv
+    from ray import tune
 
+    tune.register_env("my_env", lambda config: WordleEnv())
     ray.init()
-    trainer = ppo.PPOTrainer(env=WordleEnv, config={"env_config": None,  # config to pass to env class
-                                                    })
+    trainer = ppo.PPOTrainer(env="my_env")
     while True:
         print(trainer.train())
