@@ -202,12 +202,24 @@ class WordleEnv(Env):
 
 if __name__ == '__main__':
     import ray
-    from ray.rllib.agents import ppo
-    from main import WordleEnv
+    import ray.rllib.agents.ppo as ppo
+    from ray.tune.logger import pretty_print
     from ray import tune
 
     tune.register_env("my_env", lambda config: WordleEnv())
     ray.init()
-    trainer = ppo.PPOTrainer(env="my_env")
-    while True:
-        print(trainer.train())
+    config = ppo.DEFAULT_CONFIG.copy()
+    config["num_gpus"] = 0
+    config["num_workers"] = 1
+    trainer = ppo.PPOTrainer(config=config, env='my_env')
+
+    # Can optionally call trainer.restore(path) to load a checkpoint.
+
+    for i in range(1000):
+        # Perform one iteration of training the policy with PPO
+        result = trainer.train()
+        print(pretty_print(result))
+
+        if i % 100 == 0:
+            checkpoint = trainer.save()
+            print("checkpoint saved at", checkpoint)
