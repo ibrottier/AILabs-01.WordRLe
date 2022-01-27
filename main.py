@@ -37,17 +37,23 @@ class WordleEnv(Env):
 
         self.done = False
         self.found_word = False
+        self.tries = 100
 
+        self.scores: [[int]] = [[0 for x in range(5)] for y in range(6)]
+        self.turns: [[chr]] = [['' for x in range(5)] for y in range(6)]
         # Action Space
-        # The Action Space is conformed by all the possible words we can try on each step
-        self.action_space = Discrete(len(WordleEnv.word_list))
+        # The Action Space is conformed by 5 position vector with 26 (in english) possible values for each position
+        self.action_space = MultiDiscrete([len(list(WordleEnv.letter_dict.values())) for x in range(5)])
 
         # Observation Space
-        self.state = np.matrix([np.zeros(5) for x in range(6)])
-        self.scores = np.matrix([np.zeros(5) for x in range(6)])
+        # The state/observation is composed by the possible letters for each position
+        self.state = self._set_initial_state()
         self.observation_space = Tuple([
-            Box(low=0, high=max(WordleEnv.letter_dict.values()), shape=(6, 5)), # 6x5 Matrix showing the used letters in each position (0 -> not played)
-            Box(low=0, high=3, shape=(6, 5)), # 6x5 Matrix showing the score for each letter guessed (0 -> not played, 1 -> not found, 2 -> found. 3 -> correct)
+            MultiBinary(len(list(WordleEnv.letter_dict.values()))),
+            MultiBinary(len(list(WordleEnv.letter_dict.values()))),
+            MultiBinary(len(list(WordleEnv.letter_dict.values()))),
+            MultiBinary(len(list(WordleEnv.letter_dict.values()))),
+            MultiBinary(len(list(WordleEnv.letter_dict.values())))
         ])
 
     def reset(self, seed: int = None):
@@ -60,11 +66,34 @@ class WordleEnv(Env):
 
         self.done = False
         self.found_word = False
+        self.tries = 100
 
-        self.state = np.matrix([np.zeros(5) for x in range(6)])
-        self.scores = np.matrix([np.zeros(5) for x in range(6)])
+        self.scores: [[int]] = [[0 for x in range(5)] for y in range(6)]
+        self.turns: [[chr]] = [['' for x in range(5)] for y in range(6)]
 
-        return [self.state, self.scores]
+        self.state = self._set_initial_state()
+
+        return self.state
+
+    def _set_initial_state(self):
+
+        self.state = [np.zeros(len(list(WordleEnv.letter_dict.values()))) for x in range(5)]
+        initial_state = []
+        for _ in range(5):
+            ans = []
+            for word in WordleEnv.word_list:
+                for letter in word:
+                    if letter not in ans:
+                        aux = WordleEnv.letter_dict[letter] - 1
+                        ans.append(aux)
+            initial_state.append(ans)
+
+        self.state = [np.zeros(len(list(WordleEnv.letter_dict.values()))) for x in range(5)]
+        for _ in range(5):
+            for l in self.possible_letters[_]:
+                self.state[_][l] = 1
+
+        return self.state
 
     def get_reward(self, option):
 
@@ -75,71 +104,91 @@ class WordleEnv(Env):
             reward = reward * 10 if self.found_word else reward
         elif option == 1:
             reward = 1 / len(self.possible_words) * self.remaining_turns
-            reward = reward * 2 if self.found_word else reward
+            reward = reward * 10 if self.found_word else reward
         elif option == 2:
-            reward = sum([(self.scores[turn, x] - 1) * 5 for x in range(5)]) * self.remaining_turns
+            reward = sum([(self.scores[turn][x] - 1) * 5 for x in range(5)]) * self.remaining_turns
             reward = reward * 10 if self.found_word else reward
         else:
             raise ValueError(f'Option {option} not mapped in get_reward method')
 
         return reward
 
-    def step(self, action: int):
+    def _get_action_validity(self, action: [int]):
+        word = [list(WordleEnv.letter_dict.keys())[x] for x in action]
+        if word in WordleEnv.word_list:
+            return True, word
+        else:
+            return False, word
 
-        turn = 6 - self.remaining_turns
 
-        self.state[turn] = [WordleEnv.letter_dict[c] for c in WordleEnv.word_list[action]]
-        self.possible_words, self.scores[turn] = self._check_word(action, self.possible_words)
+    def step(self, action: [int]):
 
-        self.found_word = True if all([int(self.state[turn, x]) == self.answer[x] for x in range(5)]) else False
-        reward = self.get_reward(2)
+        validity, word = self._get_action_validity(action)
+        if validity:
+            turn = 6 - self.remaining_turns
 
-        self.remaining_turns -= 1
-        self.done = True if self.found_word else False
-        self.done = True if self.remaining_turns == 0 else self.done
+            self.turns[turn] = [WordleEnv.letter_dict[c] for c in WordleEnv.word_list[action]]
+            self.possible_words, self.scores[turn] = self._check_word(action, self.possible_words)
+
+            self.found_word = True if all([int(self.turns[turn][x]) == self.answer[x] for x in range(5)]) else False
+            reward = self.get_reward(1)
+
+            self.state = [np.zeros(len(list(WordleEnv.letter_dict.values()))) for x in range(5)]
+            for _ in range(5):
+                for l in self.possible_letters[_]:
+                    self.state[_][l] = 1
+
+            self.remaining_turns -= 1
+            self.done = True if self.found_word else False
+            self.done = True if self.remaining_turns == 0 else self.done
+        else:
+            reward = -100
+            self.tries -= 1
+            self.done = True if self.tries == 0 else False
 
         info = {
             'answer': self.get_answer(),
             'action_id': action,
-            'action_word': WordleEnv.word_list[action],
+            'action_word': word,
             'reward': reward,
             'found_word': self.found_word,
             'remaining_turns': self.remaining_turns
         }
 
-        return [self.state, self.scores], reward, self.done, info
+        return self.state, reward, self.done, info
 
     def render(self):
 
         turn = 6 - self.remaining_turns
         print(f'\t\tTurn {turn}')
         for i in range(turn):
-            word = [int(self.state[i, x]) for x in range(5)]
+            word = [int(self.turns[i][x]) for x in range(5)]
             print(self.get_word(word))
-            print([int(self.scores[i, x]) for x in range(5)])
+            print([int(self.scores[i][x]) for x in range(5)])
 
 
     def _check_word(self, action, possible_words):
 
-        word = WordleEnv.word_list[action]
+        valid, word = self._get_action_validity(action)
 
-        position = 0
-        letters = []
-        scores = []
-        for letter in word:
-            score = 1
-            score = 2 if WordleEnv.letter_dict[letter] in self.answer else score
-            score = 3 if WordleEnv.letter_dict[letter] == self.answer[position] else score
-            position += 1
+        if valid:
+            position = 0
+            letters = []
+            scores = []
+            for letter in word:
+                score = 1
+                score = 2 if WordleEnv.letter_dict[letter] in self.answer else score
+                score = 3 if WordleEnv.letter_dict[letter] == self.answer[position] else score
+                position += 1
 
-            letters.append(letter)
-            scores.append(score)
+                letters.append(letter)
+                scores.append(score)
 
-        assert len(scores) == len(letters) == 5
-        for _ in range(5):
-            possible_words = self._check_letter(letters[_], scores[_], _, possible_words)
+            assert len(scores) == len(letters) == 5
+            for _ in range(5):
+                possible_words = self._check_letter(letters[_], scores[_], _, possible_words)
 
-        return possible_words, scores
+            return possible_words, scores
 
     def _check_letter(self, letter, score, position, possible_words):
 
@@ -151,7 +200,7 @@ class WordleEnv(Env):
         for pw in possible_words:
 
             w = WordleEnv.word_list[pw]
-            letter_aux = WordleEnv.letter_dict[letter]
+            letter_aux = WordleEnv.letter_dict[letter] - 1
 
             # The letter is in the answer word
             if score == 3:
@@ -210,7 +259,7 @@ if __name__ == '__main__':
 
     # Can optionally call trainer.restore(path) to load a checkpoint.
 
-    for i in range(1000):
+    for i in range(250):
         # Perform one iteration of training the policy with PPO
         result = trainer.train()
         print(pretty_print(result))
