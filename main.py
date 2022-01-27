@@ -22,8 +22,8 @@ from gym import Env
 from gym.spaces import Discrete, Box, Tuple, MultiBinary, MultiDiscrete
 
 class WordleEnv(Env):
-    word_list = [row['HEADER'] for _, row in pd.read_csv('five_letter_words.txt').iterrows()]
-    letter_dict = {row['IDX']: row['VALUE'] for _, row in pd.read_csv('letters.txt').iterrows()}
+    word_list = [row['HEADER'] for _, row in pd.read_csv(r'C:\Users\patricio.ivan.pipp\Documents\RL\AILabs-01.WordRLe\five_letter_words.txt').iterrows()]
+    letter_dict = {row['IDX']: row['VALUE'] for _, row in pd.read_csv(r'C:\Users\patricio.ivan.pipp\Documents\RL\AILabs-01.WordRLe\letters.txt').iterrows()}
 
     def __init__(self, seed: int = None):
 
@@ -95,7 +95,7 @@ class WordleEnv(Env):
         self.found_word = [int(self.state[turn, x]) == self.answer[x] for x in range(5)]
 
         done = True if self.found_word or self.remaining_turns == 0 else False
-        reward = self.get_reward(2)
+        reward = self.get_reward(1)
 
         info = {}
 
@@ -193,7 +193,7 @@ if __name__ == '__main__':
     from ray import tune
 
     tune.register_env("my_env", lambda config: WordleEnv())
-    ray.init()
+    ray.init(dashboard_host="0.0.0.0")
     config = ppo.DEFAULT_CONFIG.copy()
     config["num_gpus"] = 0
     config["num_workers"] = 1
