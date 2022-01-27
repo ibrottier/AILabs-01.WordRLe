@@ -66,6 +66,23 @@ class WordleEnv(Env):
 
         return [self.state, self.scores]
 
+    def get_reward(self, option):
+
+        turn = 6 - self.remaining_turns
+
+        if option == 0:
+            reward = len(WordleEnv.word_list) / len(self.possible_words) * self.remaining_turns
+            reward = reward * 10 if self.found_word else reward
+        elif option == 1:
+            reward = 1 / len(self.possible_words) * self.remaining_turns
+            reward = reward * 2 if self.found_word else reward
+        elif option == 2:
+            reward = sum(self.state[turn]) * self.remaining_turns
+        else:
+            raise ValueError(f'Option {option} not mapped in get_reward method')
+
+        return reward
+
     def step(self, action: int):
 
         turn = 6 - self.remaining_turns
@@ -78,8 +95,7 @@ class WordleEnv(Env):
         self.found_word = [int(self.state[turn, x]) == self.answer[x] for x in range(5)]
 
         done = True if self.found_word or self.remaining_turns == 0 else False
-        reward = len(WordleEnv.word_list) / len(self.possible_words) * self.remaining_turns
-        reward = reward * 10 if self.found_word else reward
+        reward = self.get_reward(2)
 
         info = {}
 
