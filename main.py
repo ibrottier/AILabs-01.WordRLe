@@ -77,7 +77,7 @@ class WordleEnv(Env):
             reward = 1 / len(self.possible_words) * self.remaining_turns
             reward = reward * 2 if self.found_word else reward
         elif option == 2:
-            reward = sum(self.state[turn]) * self.remaining_turns
+            reward = sum([self.state[turn, x] for x in range(5)]) * self.remaining_turns
         else:
             raise ValueError(f'Option {option} not mapped in get_reward method')
 
@@ -90,14 +90,13 @@ class WordleEnv(Env):
         self.state[turn] = [WordleEnv.letter_dict[c] for c in WordleEnv.word_list[action]]
         self.possible_words, self.scores[turn] = self._check_word(action, self.possible_words)
 
-        self.remaining_turns -= 1
-
         self.found_word = [int(self.state[turn, x]) == self.answer[x] for x in range(5)]
 
         done = True if self.found_word or self.remaining_turns == 0 else False
-        reward = self.get_reward(1)
+        reward = self.get_reward(2)
 
         info = {}
+        self.remaining_turns -= 1
 
         return [self.state, self.scores], reward, done, info
 
@@ -191,9 +190,10 @@ if __name__ == '__main__':
     import ray.rllib.agents.ppo as ppo
     from ray.tune.logger import pretty_print
     from ray import tune
+    import logging
 
     tune.register_env("my_env", lambda config: WordleEnv())
-    ray.init(dashboard_host="0.0.0.0")
+    ray.init(logging_level=logging.DEBUG)
     config = ppo.DEFAULT_CONFIG.copy()
     config["num_gpus"] = 0
     config["num_workers"] = 1
