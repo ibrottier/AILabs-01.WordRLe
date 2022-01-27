@@ -22,8 +22,8 @@ from gym import Env
 from gym.spaces import Discrete, Box, Tuple, MultiBinary, MultiDiscrete
 
 class WordleEnv(Env):
-    word_list = [row['HEADER'] for _, row in pd.read_csv(r'C:\Users\patricio.ivan.pipp\Documents\RL\AILabs-01.WordRLe\five_letter_words.txt').iterrows()]
-    letter_dict = {row['IDX']: row['VALUE'] for _, row in pd.read_csv(r'C:\Users\patricio.ivan.pipp\Documents\RL\AILabs-01.WordRLe\letters.txt').iterrows()}
+    word_list = [row['HEADER'] for _, row in pd.read_csv(r'C:\Users\ignacio.brottier\Documents\PROJECTOS\AI Labs\AILabs-01.WordRLe\five_letter_words.txt').iterrows()]
+    letter_dict = {row['IDX']: row['VALUE'] for _, row in pd.read_csv(r'C:\Users\ignacio.brottier\Documents\PROJECTOS\AI Labs\AILabs-01.WordRLe\letters.txt').iterrows()}
 
     def __init__(self, seed: int = None):
 
@@ -77,7 +77,8 @@ class WordleEnv(Env):
             reward = 1 / len(self.possible_words) * self.remaining_turns
             reward = reward * 2 if self.found_word else reward
         elif option == 2:
-            reward = sum([self.state[turn, x] for x in range(5)]) * self.remaining_turns
+            reward = sum([self.scores[turn, x] for x in range(5)]) * self.remaining_turns
+            reward = reward * 2 if self.found_word else reward
         else:
             raise ValueError(f'Option {option} not mapped in get_reward method')
 
@@ -90,15 +91,23 @@ class WordleEnv(Env):
         self.state[turn] = [WordleEnv.letter_dict[c] for c in WordleEnv.word_list[action]]
         self.possible_words, self.scores[turn] = self._check_word(action, self.possible_words)
 
-        self.found_word = [int(self.state[turn, x]) == self.answer[x] for x in range(5)]
-
-        done = True if self.found_word or self.remaining_turns == 0 else False
+        self.found_word = True if all([int(self.state[turn, x]) == self.answer[x] for x in range(5)]) else False
         reward = self.get_reward(2)
 
-        info = {}
         self.remaining_turns -= 1
+        self.done = True if self.found_word else False
+        self.done = True if self.remaining_turns == 0 else self.done
 
-        return [self.state, self.scores], reward, done, info
+        info = {
+            'answer': self.get_answer(),
+            'action_id': action,
+            'action_word': WordleEnv.word_list[action],
+            'reward': reward,
+            'found_word': self.found_word,
+            'remaining_turns': self.remaining_turns
+        }
+
+        return [self.state, self.scores], reward, self.done, info
 
     def render(self):
 
