@@ -77,8 +77,8 @@ class WordleEnv(Env):
             reward = 1 / len(self.possible_words) * self.remaining_turns
             reward = reward * 2 if self.found_word else reward
         elif option == 2:
-            reward = sum([self.scores[turn, x] for x in range(5)]) * self.remaining_turns
-            reward = reward * 2 if self.found_word else reward
+            reward = sum([(self.scores[turn, x] - 1) * 5 for x in range(5)]) * self.remaining_turns
+            reward = reward * 10 if self.found_word else reward
         else:
             raise ValueError(f'Option {option} not mapped in get_reward method')
 
