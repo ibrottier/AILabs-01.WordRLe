@@ -41,19 +41,14 @@ class WordleEnv(Env):
         self.scores: [[int]] = [[0 for x in range(5)] for y in range(6)]
         self.turns: [[chr]] = [['' for x in range(5)] for y in range(6)]
         # Action Space
-        # The Action Space is conformed by 5 position vector with 26 (in english) possible values for each position
-        self.action_space = MultiDiscrete([len(list(WordleEnv.letter_dict.values())) for x in range(5)])
+        # The Action Space is conformed by the chosen word
+        self.action_space = Discrete(len(WordleEnv.word_list))
 
         # Observation Space
-        # The state/observation is composed by the possible letters for each position
-        self.state = self._set_initial_state()
-        self.observation_space = Tuple([
-            MultiBinary(len(list(WordleEnv.letter_dict.values()))),
-            MultiBinary(len(list(WordleEnv.letter_dict.values()))),
-            MultiBinary(len(list(WordleEnv.letter_dict.values()))),
-            MultiBinary(len(list(WordleEnv.letter_dict.values()))),
-            MultiBinary(len(list(WordleEnv.letter_dict.values())))
-        ])
+        # The state/observation is composed by the possible words
+        self.state = np.ones(len(WordleEnv.word_list))
+        self.observation_space = MultiBinary(len(WordleEnv.word_list))
+
 
     def reset(self, seed: int = None):
         self.seed: int = random.randint(0, len(WordleEnv.word_list) - 1) if seed is None else seed
@@ -69,7 +64,7 @@ class WordleEnv(Env):
         self.scores: [[int]] = [[0 for x in range(5)] for y in range(6)]
         self.turns: [[chr]] = [['' for x in range(5)] for y in range(6)]
 
-        self.state = self._set_initial_state()
+        self.state = np.ones(len(WordleEnv.word_list))
 
         return self.state
 
@@ -129,28 +124,20 @@ class WordleEnv(Env):
         return action
 
 
-    def step(self, action: [int]):
-
-        validity, word = self._get_action_validity(action)
-        if not validity:
-            action = self._get_valid_action()
-            reward_aux = -100
-        else:
-            reward_aux = 0
+    def step(self, action: int):
 
         turn = 6 - self.remaining_turns
+        word = WordleEnv.word_list[action]
 
-        self.turns[turn] = action
+        self.turns[turn] = [c for c in word]
         self.possible_words, self.scores[turn] = self._check_word(action, self.possible_words)
 
-        self.found_word = True if all([int(self.turns[turn][x]) == self.answer[x] for x in range(5)]) else False
+        self.found_word = True if all([self.turns[turn][x] == self.get_answer()[x] for x in range(5)]) else False
         reward = self.get_reward(1)
-        reward += reward_aux
 
-        self.state = [np.zeros(len(list(WordleEnv.letter_dict.values()))) for x in range(5)]
-        for _ in range(5):
-            for l in self.possible_letters[_]:
-                self.state[_][l] = 1
+        self.state = np.zeros(len(WordleEnv.word_list))
+        for _ in self.possible_words:
+            self.state[_] = 1
 
         self.remaining_turns -= 1
         self.done = True if self.found_word else False
@@ -173,34 +160,31 @@ class WordleEnv(Env):
         turn = 6 - self.remaining_turns
         print(f'\t\tTurn {turn}')
         for i in range(turn):
-            print(self.get_word(self.turns[i]))
-            print(self.scores[i] )
+            print(self.turns[i])
+            print(self.scores[i])
 
 
     def _check_word(self, action, possible_words):
 
-        valid, word = self._get_action_validity(action)
+        word = WordleEnv.word_list[action]
 
-        if valid:
-            position = 0
-            letters = []
-            scores = []
-            for letter in word:
-                score = 1
-                score = 2 if WordleEnv.letter_dict[letter] in self.answer else score
-                score = 3 if WordleEnv.letter_dict[letter] == self.answer[position] else score
-                position += 1
+        position = 0
+        letters = []
+        scores = []
+        for letter in word:
+            score = 1
+            score = 2 if WordleEnv.letter_dict[letter] in self.answer else score
+            score = 3 if WordleEnv.letter_dict[letter] == self.answer[position] else score
+            position += 1
 
-                letters.append(letter)
-                scores.append(score)
+            letters.append(letter)
+            scores.append(score)
 
-            assert len(scores) == len(letters) == 5
-            for _ in range(5):
-                possible_words = self._check_letter(letters[_], scores[_], _, possible_words)
+        assert len(scores) == len(letters) == 5
+        for _ in range(5):
+            possible_words = self._check_letter(letters[_], scores[_], _, possible_words)
 
-            return possible_words, scores
-        else:
-            raise ValueError(f'Word {word} not valid')
+        return possible_words, scores
 
     def _check_letter(self, letter, score, position, possible_words):
 
@@ -245,11 +229,11 @@ class WordleEnv(Env):
         return ans
 
     def get_answer(self):
-        return self.get_word(self.answer)
+        return self.get_word([x for x in self.answer])
 
     def try_word(self, word):
         if word in WordleEnv.word_list:
-            action = [ WordleEnv.letter_dict[c] for c in word]
+            action = WordleEnv.word_list.index(word)
             self.step(action)
         else:
             print('The word does not exist in current WordRLe five')
@@ -262,15 +246,16 @@ if __name__ == '__main__':
     from ray import tune
     import logging
 
-    tune.register_env("my_env", lambda config: WordleEnv())
+    env_name = "WordRLe - Word Driven v 1.2"
+    tune.register_env(env_name, lambda config: WordleEnv())
     ray.init(logging_level=logging.DEBUG)
     config = ppo.DEFAULT_CONFIG.copy()
     config["num_gpus"] = 0
-    config["num_workers"] = 1
-    trainer = ppo.PPOTrainer(config=config, env='my_env')
+    config["num_workers"] = 2
+    trainer = ppo.PPOTrainer(config=config, env=env_name)
 
     # Can optionally call trainer.restore(path) to load a checkpoint.
-    trainer.restore(r'C:\Users\ignacio.brottier\ray_results\PPO_my_env_2022-01-27_18-02-50chwzndcn\checkpoint_000991\checkpoint_000991')
+    trainer.restore(r'C:\Users\ignacio.brottier\ray_results\PPO_WordRLe - Word Driven v 1.2_2022-01-28_18-06-242i51ad52\checkpoint_000031\checkpoint-31')
 
     for i in range(1000):
         # Perform one iteration of training the policy with PPO
