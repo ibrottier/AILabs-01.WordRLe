@@ -22,8 +22,8 @@ from gym import Env
 from gym.spaces import Discrete, Box, Tuple, MultiBinary, MultiDiscrete
 
 class WordleEnv(Env):
-    word_list = [row['HEADER'] for _, row in pd.read_csv(r'C:\Users\ignacio.brottier\Documents\PROJECTOS\AI Labs\AILabs-01.WordRLe\five_letter_words.txt').iterrows()]
-    letter_dict = {row['IDX']: row['VALUE'] for _, row in pd.read_csv(r'C:\Users\ignacio.brottier\Documents\PROJECTOS\AI Labs\AILabs-01.WordRLe\letters.txt').iterrows()}
+    word_list = [row['HEADER'] for _, row in pd.read_csv(r'C:\Users\patricio.ivan.pipp\Documents\RL\AILabs-01.WordRLe\five_letter_words.txt').iterrows()]
+    letter_dict = {row['IDX']: row['VALUE'] for _, row in pd.read_csv(r'C:\Users\patricio.ivan.pipp\Documents\RL\AILabs-01.WordRLe\letters.txt').iterrows()}
 
     def __init__(self, seed: int = None):
 
@@ -144,8 +144,8 @@ class WordleEnv(Env):
         self.possible_words, self.scores[turn] = self._check_word(action, self.possible_words)
 
         self.found_word = True if all([int(self.turns[turn][x]) == self.answer[x] for x in range(5)]) else False
-        reward = self.get_reward(1)
-        reward += reward_aux
+        reward = self.get_reward(2) if validity else -100
+        # reward += reward_aux
 
         self.state = [np.zeros(len(list(WordleEnv.letter_dict.values()))) for x in range(5)]
         for _ in range(5):
@@ -266,13 +266,13 @@ if __name__ == '__main__':
     ray.init(logging_level=logging.DEBUG)
     config = ppo.DEFAULT_CONFIG.copy()
     config["num_gpus"] = 0
-    config["num_workers"] = 1
+    config["num_workers"] = 4
     trainer = ppo.PPOTrainer(config=config, env='my_env')
 
     # Can optionally call trainer.restore(path) to load a checkpoint.
-    trainer.restore(r'C:\Users\ignacio.brottier\ray_results\PPO_my_env_2022-01-27_18-02-50chwzndcn\checkpoint_000991\checkpoint_000991')
+    trainer.restore(r'C:\Users\patricio.ivan.pipp\ray_results\PPO_my_env_2022-01-28_17-53-32w2cu9v5s\checkpoint_000593\checkpoint-593')
 
-    for i in range(1000):
+    for i in range(2000):
         # Perform one iteration of training the policy with PPO
         result = trainer.train()
         print(pretty_print(result))

@@ -19,15 +19,10 @@ def train_ppo_model():
 
 checkpoint_path = train_ppo_model()
 
-@serve.deployment(route_prefix="/cartpole-ppo")
+@serve.deployment
 class ServePPOModel:
     def __init__(self, checkpoint_path) -> None:
         self.trainer = ppo.PPOTrainer(
-            config={
-                "framework": "torch",
-                # only 1 "local" worker with an env (not really used here).
-                "num_workers": 0,
-            },
             env="my_env",
         )
         self.trainer.restore(checkpoint_path)
@@ -41,6 +36,9 @@ class ServePPOModel:
 
 
 if __name__ == '__main__':
+    from ray import tune
+    tune.register_env("my_env", lambda config: WordleEnv())
+
     serve.start()
     ServePPOModel.deploy(r'C:\Users\patricio.ivan.pipp\ray_results\PPO_my_env_2022-01-28_17-53-32w2cu9v5s\checkpoint_000593\checkpoint-593')
 
@@ -50,8 +48,11 @@ if __name__ == '__main__':
         obs = env.reset()
 
         print(f"-> Sending observation {obs}")
+        obs_ = [obs.tolist() for o in obs]
+        print(obs_)
+
         resp = requests.get(
-            "http://localhost:8000/cartpole-ppo", json={"observation": obs.tolist()}
+            "http://localhost:8000", json={"observation": obs.tolist()}
         )
         print(f"<- Received response {resp.json()}")
     # Output:
