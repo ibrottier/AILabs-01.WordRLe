@@ -6,20 +6,7 @@ import ray
 import ray.rllib.agents.ppo as ppo
 from ray import serve
 
-def train_ppo_model():
-    trainer = ppo.PPOTrainer(
-        config={"framework": "torch", "num_workers": 0},
-        env="CartPole-v0",
-    )
-    # Train for one iteration
-    trainer.train()
-    trainer.save("/tmp/rllib_checkpoint")
-    return "/tmp/rllib_checkpoint/checkpoint_000001/checkpoint-1"
-
-
-checkpoint_path = train_ppo_model()
-
-@serve.deployment
+@serve.deployment(route_prefix="/test")
 class ServePPOModel:
     def __init__(self, checkpoint_path) -> None:
         self.trainer = ppo.PPOTrainer(
@@ -48,11 +35,11 @@ if __name__ == '__main__':
         obs = env.reset()
 
         print(f"-> Sending observation {obs}")
-        obs_ = [obs.tolist() for o in obs]
+        obs_ = [o.tolist() for o in obs]
         print(obs_)
 
         resp = requests.get(
-            "http://localhost:8000", json={"observation": obs.tolist()}
+            "http://localhost:8000/test", json={"observation": obs_}
         )
         print(f"<- Received response {resp.json()}")
     # Output:
